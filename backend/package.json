@@ -1,12 +1,18 @@
+
 {
-  "name": "backend",
+  "name": "book-club-meeting-website",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Book Club Meeting website and REST API",
+  "main": "server.js",
   "scripts": {
-  "start": "node backend/server.js"
-},
-  "keywords": [],
+    "start": "node server.js"
+  },
+  "keywords": [
+    "book-club",
+    "meetings",
+    "express",
+    "sqlite"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
