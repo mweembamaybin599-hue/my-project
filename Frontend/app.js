@@ -1,11 +1,14 @@
-// ============================================================
-// BOOK CLUB MEETING MANAGER
-// Frontend JavaScript
-// Question 8 - Single-Table CRUD App
-// ============================================================
 
-// API endpoint
-const API_URL = "/api/meetings";
+/*
+============================================================
+BOOK CLUB MEETING MANAGER
+Frontend JavaScript
+Question 8 - Single-Table CRUD App
+MAYBIN MWEEMBA
+============================================================
+*/
+
+const API_URL = "api/meetings";
 
 // Form elements
 const meetingForm = document.getElementById("meetingForm");
@@ -15,9 +18,21 @@ const cancelButton = document.getElementById("cancelButton");
 const statusMessage = document.getElementById("status");
 const meetingsTable = document.getElementById("meetingsTable");
 
-// Keep track of whether we are adding or editing
 let editingId = null;
 
+// Check that the HTML elements exist
+if (
+    !meetingForm ||
+    !formTitle ||
+    !saveButton ||
+    !cancelButton ||
+    !statusMessage ||
+    !meetingsTable
+) {
+    console.error(
+        "Required HTML elements are missing. Check index.html."
+    );
+}
 
 // ============================================================
 // 1. DISPLAY STATUS MESSAGE
@@ -26,32 +41,66 @@ let editingId = null;
 function showStatus(message, type = "") {
     statusMessage.textContent = message;
     statusMessage.className = type;
-
-    // Automatically remove the message after 4 seconds
-    setTimeout(() => {
-        statusMessage.textContent = "";
-        statusMessage.className = "";
-    }, 4000);
 }
-
 
 // ============================================================
 // 2. ESCAPE HTML
-// Prevent unsafe HTML from being inserted into the page
 // ============================================================
 
 function escapeHtml(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+    })[character]);
 }
 
+// ============================================================
+// 3. API REQUEST HELPER
+// Reports HTTP errors and invalid JSON responses.
+// ============================================================
+
+async function apiRequest(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            ...(options.body ? {
+                "Content-Type": "application/json"
+            } : {}),
+            ...options.headers
+        }
+    });
+
+    const responseText = await response.text();
+    let data = null;
+
+    if (responseText) {
+        try {
+            data = JSON.parse(responseText);
+        } catch {
+            throw new Error(
+                `The server returned non-JSON data (HTTP ${response.status}). ` +
+                `Response: ${responseText.slice(0, 200)}`
+            );
+        }
+    }
+
+    if (!response.ok) {
+        const message =
+            data?.error ||
+            data?.message ||
+            `The server returned HTTP ${response.status}.`;
+
+        throw new Error(message);
+    }
+
+    return data;
+}
 
 // ============================================================
-// 3. LOAD ALL MEETINGS
+// 4. LOAD ALL MEETINGS
 // GET /api/meetings
 // ============================================================
 
@@ -63,13 +112,17 @@ async function loadMeetings() {
     `;
 
     try {
-        const response = await fetch(API_URL);
+        const result = await apiRequest(API_URL);
 
-        const meetings = await response.json();
+        // The API is expected to return an array.
+        const meetings = Array.isArray(result)
+            ? result
+            : result?.meetings;
 
-        if (!response.ok) {
+        if (!Array.isArray(meetings)) {
             throw new Error(
-                meetings.error || "Failed to load meetings."
+                "The API response is not a list of meetings. " +
+                "Check the GET /api/meetings route in server.js."
             );
         }
 
@@ -81,401 +134,261 @@ async function loadMeetings() {
         meetingsTable.innerHTML = `
             <tr>
                 <td colspan="9">
-                    Unable to load meetings.
+                    Could not load meetings:
+                    ${escapeHtml(error.message)}
                 </td>
             </tr>
         `;
 
         showStatus(
-            "Could not load meetings. Make sure the server is running.",
+            `Unable to load meetings: ${error.message}`,
             "error"
         );
     }
 }
 
-
 // ============================================================
-// 4. DISPLAY MEETINGS IN THE TABLE
+// 5. DISPLAY MEETINGS
 // ============================================================
 
 function displayMeetings(meetings) {
-
     if (meetings.length === 0) {
         meetingsTable.innerHTML = `
             <tr>
-                <td colspan="9">
-                    No meetings have been added yet.
-                </td>
+                <td colspan="9">No meetings have been added yet.</td>
             </tr>
         `;
-
         return;
     }
 
     meetingsTable.innerHTML = meetings.map(meeting => `
         <tr>
             <td>${escapeHtml(meeting.id)}</td>
-
             <td>${escapeHtml(meeting.book_title)}</td>
-
             <td>${escapeHtml(meeting.meeting_date)}</td>
-
             <td>${escapeHtml(meeting.meeting_time)}</td>
-
             <td>${escapeHtml(meeting.venue)}</td>
-
             <td>${escapeHtml(meeting.discussion_topic)}</td>
-
             <td>${escapeHtml(meeting.facilitator)}</td>
-
             <td>${escapeHtml(meeting.meeting_goal)}</td>
-
             <td>
                 <div class="buttons">
-
                     <button
                         class="edit"
                         type="button"
                         data-action="edit"
-                        data-id="${meeting.id}">
+                        data-id="${escapeHtml(meeting.id)}">
                         Edit
                     </button>
-
                     <button
                         class="delete"
                         type="button"
                         data-action="delete"
-                        data-id="${meeting.id}">
+                        data-id="${escapeHtml(meeting.id)}">
                         Delete
                     </button>
-
                 </div>
             </td>
         </tr>
     `).join("");
 }
 
-
 // ============================================================
-// 5. GET ONE MEETING
+// 6. GET ONE MEETING
 // GET /api/meetings/:id
 // ============================================================
 
 async function getMeeting(id) {
-
-    const response = await fetch(`${API_URL}/${id}`);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            data.error || "Failed to retrieve meeting."
-        );
-    }
-
-    return data;
+    return await apiRequest(
+        `${API_URL}/${encodeURIComponent(id)}`
+    );
 }
 
-
 // ============================================================
-// 6. START EDITING A MEETING
+// 7. EDIT A MEETING
 // ============================================================
 
 async function editMeeting(id) {
-
     try {
-
         const meeting = await getMeeting(id);
 
-        // Store the ID currently being edited
         editingId = id;
 
-        // Put the meeting information into the form
-        document.getElementById("book_title").value =
-            meeting.book_title;
+        const fields = [
+            "book_title",
+            "meeting_date",
+            "meeting_time",
+            "venue",
+            "discussion_topic",
+            "facilitator",
+            "meeting_goal"
+        ];
 
-        document.getElementById("meeting_date").value =
-            meeting.meeting_date;
+        fields.forEach(field => {
+            const input = document.getElementById(field);
+            input.value = meeting[field] ?? "";
+        });
 
-        document.getElementById("meeting_time").value =
-            meeting.meeting_time;
-
-        document.getElementById("venue").value =
-            meeting.venue;
-
-        document.getElementById("discussion_topic").value =
-            meeting.discussion_topic;
-
-        document.getElementById("facilitator").value =
-            meeting.facilitator;
-
-        document.getElementById("meeting_goal").value =
-            meeting.meeting_goal;
-
-        // Change form appearance
         formTitle.textContent = "Edit Book Club Meeting";
-
         saveButton.textContent = "Update Meeting";
-
         cancelButton.hidden = false;
 
-        showStatus(
-            `Editing meeting #${id}. Make your changes and click Update Meeting.`,
-            "success"
-        );
+        showStatus(`Editing meeting #${id}.`, "success");
 
-        // Move user back to the form
         meetingForm.scrollIntoView({
             behavior: "smooth",
             block: "start"
         });
 
     } catch (error) {
-
         console.error("Edit meeting error:", error);
-
         showStatus(
-            error.message || "Could not load meeting for editing.",
+            `Could not load meeting for editing: ${error.message}`,
             "error"
         );
     }
 }
 
-
 // ============================================================
-// 7. DELETE A MEETING
+// 8. DELETE A MEETING
 // DELETE /api/meetings/:id
 // ============================================================
 
 async function deleteMeeting(id) {
-
-    const confirmed = confirm(
-        `Are you sure you want to delete meeting #${id}?`
-    );
-
-    if (!confirmed) {
+    if (!confirm(`Are you sure you want to delete meeting #${id}?`)) {
         return;
     }
 
     try {
-
-        const response = await fetch(`${API_URL}/${id}`, {
-            method: "DELETE"
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                data.error || "Failed to delete meeting."
-            );
-        }
-
-        showStatus(
-            `Meeting #${id} was deleted successfully.`,
-            "success"
+        await apiRequest(
+            `${API_URL}/${encodeURIComponent(id)}`,
+            { method: "DELETE" }
         );
 
-        // If the deleted meeting was being edited,
-        // return the form to Add mode.
-        if (editingId === id) {
+        if (String(editingId) === String(id)) {
             resetForm();
         }
 
-        // Refresh table
+        showStatus(
+            `Meeting #${id} deleted successfully.`,
+            "success"
+        );
+
         await loadMeetings();
 
     } catch (error) {
-
         console.error("Delete meeting error:", error);
-
         showStatus(
-            error.message || "Could not delete meeting.",
+            `Could not delete meeting: ${error.message}`,
             "error"
         );
     }
 }
 
-
 // ============================================================
-// 8. FORM SUBMISSION
-// POST = CREATE
-// PUT  = UPDATE
+// 9. CREATE OR UPDATE A MEETING
+// POST /api/meetings
+// PUT /api/meetings/:id
 // ============================================================
 
-meetingForm.addEventListener("submit", async function(event) {
-
+meetingForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    // Collect form data
-    const formData = new FormData(meetingForm);
+    const fields = [
+        "book_title",
+        "meeting_date",
+        "meeting_time",
+        "venue",
+        "discussion_topic",
+        "facilitator",
+        "meeting_goal"
+    ];
 
-    const meetingData = {
-        book_title: formData.get("book_title").trim(),
-        meeting_date: formData.get("meeting_date").trim(),
-        meeting_time: formData.get("meeting_time").trim(),
-        venue: formData.get("venue").trim(),
-        discussion_topic: formData.get("discussion_topic").trim(),
-        facilitator: formData.get("facilitator").trim(),
-        meeting_goal: formData.get("meeting_goal").trim()
-    };
+    const meetingData = {};
+
+    fields.forEach(field => {
+        meetingData[field] =
+            document.getElementById(field).value.trim();
+    });
+
+    saveButton.disabled = true;
+    showStatus("Saving meeting...");
 
     try {
+        const isEditing = editingId !== null;
 
-        let response;
+        const url = isEditing
+            ? `${API_URL}/${encodeURIComponent(editingId)}`
+            : API_URL;
 
-        // ----------------------------------------------------
-        // CREATE
-        // ----------------------------------------------------
+        await apiRequest(url, {
+            method: isEditing ? "PUT" : "POST",
+            body: JSON.stringify(meetingData)
+        });
 
-        if (editingId === null) {
+        showStatus(
+            isEditing
+                ? "Meeting updated successfully."
+                : "Meeting added successfully.",
+            "success"
+        );
 
-            response = await fetch(API_URL, {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify(meetingData)
-            });
-
-        }
-
-        // ----------------------------------------------------
-        // UPDATE
-        // ----------------------------------------------------
-
-        else {
-
-            response = await fetch(
-                `${API_URL}/${editingId}`,
-                {
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify(meetingData)
-                }
-            );
-        }
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                data.error || "Operation failed."
-            );
-        }
-
-        // ----------------------------------------------------
-        // SUCCESS
-        // ----------------------------------------------------
-
-        if (editingId === null) {
-
-            showStatus(
-                "Meeting added successfully.",
-                "success"
-            );
-
-        } else {
-
-            showStatus(
-                "Meeting updated successfully.",
-                "success"
-            );
-        }
-
-        // Reset form
         resetForm();
-
-        // Refresh meetings table
         await loadMeetings();
 
     } catch (error) {
-
         console.error("Save meeting error:", error);
-
         showStatus(
-            error.message || "Could not save meeting.",
+            `Could not save meeting: ${error.message}`,
             "error"
         );
+    } finally {
+        saveButton.disabled = false;
     }
 });
 
-
 // ============================================================
-// 9. CANCEL EDITING
+// 10. CANCEL EDITING
 // ============================================================
 
-cancelButton.addEventListener("click", function() {
-
+cancelButton.addEventListener("click", () => {
     resetForm();
-
-    showStatus(
-        "Editing cancelled.",
-        ""
-    );
+    showStatus("Editing cancelled.");
 });
 
-
 // ============================================================
-// 10. RESET FORM
-// Return form to ADD mode
+// 11. RESET FORM
 // ============================================================
 
 function resetForm() {
-
     editingId = null;
-
     meetingForm.reset();
 
     formTitle.textContent = "Add a Book Club Meeting";
-
     saveButton.textContent = "Add Meeting";
-
     cancelButton.hidden = true;
 }
 
-
 // ============================================================
-// 11. HANDLE EDIT AND DELETE BUTTONS
-// Event delegation
+// 12. EDIT AND DELETE BUTTON HANDLING
 // ============================================================
 
-meetingsTable.addEventListener("click", function(event) {
+meetingsTable.addEventListener("click", event => {
+    const button = event.target.closest("button[data-action]");
 
-    const button = event.target.closest("button");
+    if (!button) return;
 
-    if (!button) {
-        return;
-    }
+    const id = button.dataset.id;
 
-    const action = button.dataset.action;
-
-    const id = Number(button.dataset.id);
-
-    if (!id) {
-        return;
-    }
-
-    // Edit button
-    if (action === "edit") {
+    if (button.dataset.action === "edit") {
         editMeeting(id);
-    }
-
-    // Delete button
-    if (action === "delete") {
+    } else if (button.dataset.action === "delete") {
         deleteMeeting(id);
     }
 });
 
-
 // ============================================================
-// 12. LOAD MEETINGS WHEN PAGE OPENS
+// 13. LOAD MEETINGS WHEN PAGE OPENS
 // ============================================================
 
 loadMeetings();
